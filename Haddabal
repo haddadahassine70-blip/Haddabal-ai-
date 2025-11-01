@@ -1,0 +1,171 @@
+# Haddabal AI Engineering — Stair Design Assistant
+
+A high-end intelligent assistant for choosing and visualizing customized stair designs using AI and camera-based analysis.
+
+This project provides a **complete starter structure** for the Haddabal platform, combining:
+
+- **Frontend (Next.js / React)**  
+  - pages/index.jsx — Landing page + camera interface + AI results  
+  - components/CameraCapture.jsx — Capture or upload area photo  
+  - pages/api/upload.js — API proxy to backend  
+
+- **Backend (FastAPI)**  
+  - backend/main.py — AI endpoint to analyze uploaded images and suggest stair designs, colors, and geometry  
+  - requirements.txt — Python dependencies
+
+- **README** — Setup, run instructions, and future integration roadmap.
+
+---
+
+## FILE: package.json
+
+```json
+{
+  "name": "haddabal-ai-engineering-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000"
+  },
+  "dependencies": {
+    "next": "13.4.7",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "tailwindcss": "^3.4.7"
+  }
+}
+```
+
+---
+
+## FILE: pages/_app.jsx
+
+```jsx
+import '../styles/globals.css'
+export default function App({ Component, pageProps }) {
+  return <Component {...pageProps} />
+}
+```
+
+---
+
+## FILE: pages/index.jsx
+
+```jsx
+import dynamic from 'next/dynamic'
+import Head from 'next/head'
+import { useState } from 'react'
+const CameraCapture = dynamic(() => import('../components/CameraCapture'), { ssr: false })
+
+export default function Home() {
+  const [analysis, setAnalysis] = useState(null)
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-200 p-6">
+      <Head>
+        <title>Haddabal AI Engineering — Stair Design Assistant</title>
+      </Head>
+
+      <main className="max-w-3xl mx-auto bg-white p-6 rounded-2xl shadow">
+        <h1 className="text-3xl font-bold mb-3 text-center text-blue-700">Haddabal AI — الهندسة الذكية للسلالم</h1>
+        <p className="text-center mb-4 text-gray-600">
+          التقط صورة لمكان السلم، ودع الذكاء الاصطناعي يختار لك التصميم، اللون، والشكل المثالي لمنزلك.
+        </p>
+
+        <CameraCapture onResult={(res) => setAnalysis(res)} />
+
+        {analysis && (
+          <section className="mt-4">
+            <h2 className="font-semibold">نتائج التحليل</h2>
+            <pre className="bg-gray-100 p-3 rounded mt-2 overflow-auto">{JSON.stringify(analysis, null, 2)}</pre>
+          </section>
+        )}
+      </main>
+    </div>
+  )
+}
+```
+
+---
+
+## FILE: components/CameraCapture.jsx
+
+```jsx
+import React, { useRef, useState, useEffect } from 'react'
+
+export default function CameraCapture({ onResult }) {
+  const videoRef = useRef(null)
+  const canvasRef = useRef(null)
+  const [stream, setStream] = useState(null)
+  const [previewSrc, setPreviewSrc] = useState(null)
+  const [uploading, setUploading] = useState(false)
+
+  useEffect(() => {
+    async function startCamera() {
+      try {
+        const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+        setStream(s)
+        if (videoRef.current) videoRef.current.srcObject = s
+      } catch (err) {
+        console.error('Camera error:', err)
+      }
+    }
+    startCamera()
+    return () => {
+      if (stream) stream.getTracks().forEach(t => t.stop())
+    }
+  }, [])
+
+  function takePhoto() {
+    const video = videoRef.current
+    const canvas = canvasRef.current
+    if (!video || !canvas) return
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    const ctx = canvas.getContext('2d')
+    ctx.drawImage(video, 0, 0)
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.9)
+    setPreviewSrc(dataUrl)
+  }
+
+  async function uploadImage() {
+    if (!previewSrc) return
+    setUploading(true)
+    try {
+      const res = await fetch(previewSrc)
+      const blob = await res.blob()
+      const form = new FormData()
+      form.append('photo', blob, 'capture.jpg')
+
+      const r = await fetch('/api/upload', { method: 'POST', body: form })
+      const json = await r.json()
+      onResult && onResult(json)
+    } catch (err) {
+      console.error(err)
+      alert('فشل إرسال الصورة.')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  return (
+    <div>
+      <div className="mb-3">
+        <video ref={videoRef} autoPlay playsInline style={{ width: '100%', borderRadius: 8 }} />
+      </div>
+      <div className="flex gap-2 justify-center">
+        <button onClick={takePhoto} className="px-4 py-2 rounded border">التقاط صورة</button>
+        <button onClick={uploadImage} disabled={!previewSrc || uploading} className="px-4 py-2 rounded bg-blue-600 text-white">
+          {uploading ? 'جارٍ الإرسال...' : 'إرسال للتحليل'}
+        </button>
+      </div>
+
+      {previewSrc && (
+        <div className="mt-3">
+          <h4 className="mb-1">معاينة الصورة</h4>
+          <img src={previewSrc} alt="preview" style={{ width: '100%', borderRadius: 8 }} />
+        </div>
+      )}
+
+      <canva
